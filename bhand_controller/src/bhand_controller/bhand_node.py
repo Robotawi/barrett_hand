@@ -75,6 +75,8 @@ class BHand:
 			rospy.loginfo('%s::init: Desired freq (%f) is not possible. Setting desired_freq to %f'%(rospy.get_name(), self.desired_freq, DEFAULT_FREQ))
 			self.desired_freq = DEFAULT_FREQ
 		self.tactile_sensors = args['tactile_sensors'] 
+
+		#check this
 		self.real_freq = 0.0
 		
 		joint_ids_arg = args['joint_ids']
@@ -84,7 +86,7 @@ class BHand:
 		if self.control_mode != CONTROL_MODE_POSITION and self.control_mode != CONTROL_MODE_VELOCITY:
 			rospy.loginfo('%s: init: setting control mode by default to %s'%(rospy.get_name(), CONTROL_MODE_POSITION))
 			self.control_mode = CONTROL_MODE_POSITION
-		
+		 
 		self.state = State.INIT_STATE
 		# flag to control the initialization of CAN device 
 		self.can_initialized = False
@@ -133,7 +135,7 @@ class BHand:
 		# Mode of the hand to perform the grasp
 		self.grasp_mode = Service.SET_GRASP_1
 		
-		#print 'Control mode = %s'%self.control_mode
+		print 'Control mode = %s'%self.control_mode
 		
 		# Data structure to link assigned joint names with every real joint
 		# {'ID': ['joint_name', index], ...}
@@ -210,7 +212,7 @@ class BHand:
 		self._joints_publisher = rospy.Publisher('/joint_states', JointState, queue_size=5)
 		self._tact_array_publisher = rospy.Publisher('%s/tact_array'%rospy.get_name(), TactileArray, queue_size=5)
 		# SUBSCRIBERS
-		self._joints_subscriber = rospy.Subscriber('%s/command'%rospy.get_name(), JointState, self.commandCallback)
+		self._joints_subscriber = rospy.Subscriber('%s/command'%rospy.get_name(), JointState, self.myCommandCallback)
 		
 		# SERVICES
 		self._hand_service = rospy.Service('%s/actions'%rospy.get_name(), Actions, self.handActions)
@@ -480,10 +482,10 @@ class BHand:
 					time.sleep(2.0)
 				#else:
 				self.desired_joints_position['SPREAD_1'] = 3.14
-				self.desired_joints_position['SPREAD_2'] = 3.14
+				#self.desired_joints_position['SPREAD_2'] = 3.14
 				self.hand.move_to(SPREAD, self.hand.rad_to_enc(self.desired_joints_position['SPREAD_1'], BASE_TYPE), False)
 				self.grasp_mode = action
-			
+				
 		# NO pre-defined actions			
 		else: 
 			if self.control_mode == CONTROL_MODE_POSITION:
@@ -750,12 +752,34 @@ class BHand:
 			return 'UNKNOWN_ACTION'
 	
 	
-	def commandCallback(self, data):
+	def myCommandCallback(self, data):
 		'''
+			The data is received from the topic /bhand_node/command
+			The exact field is data.positions [0],[1],[2],[3]
+			The data sent ought to be in the form of the desired positions of [F1, F2, F3, SPREAD]
+			
+			Some safety conditions ought to be implemented here
 			Function called when receive a new value
 			@param data: state to convert
 			@type data: sensor_msgs.JointState
 		'''
+		self.desired_joints_position['F1'] = data.position[0]
+		self.desired_joints_position['F2'] = data.position[1]
+		self.desired_joints_position['F3'] = data.position[2]
+		self.desired_joints_position['SPREAD_1'] = data.position[3]
+		self.hand.move_to(FINGER1, self.hand.rad_to_enc(self.desired_joints_position['F1'], BASE_TYPE), False)
+		self.hand.move_to(FINGER2, self.hand.rad_to_enc(self.desired_joints_position['F2'], BASE_TYPE), False)
+		self.hand.move_to(FINGER3, self.hand.rad_to_enc(self.desired_joints_position['F3'], BASE_TYPE), False)
+		self.hand.move_to(SPREAD, self.hand.rad_to_enc(self.desired_joints_position['SPREAD_1'], BASE_TYPE), False)
+		
+		print data.position[0]
+		print data.position[1]
+		print data.position[2]
+		print data.position[3]
+
+		
+		
+	'''	
 		bingo = False
 		
 		for i in range(len(data.name)):
@@ -769,7 +793,29 @@ class BHand:
 			self.new_command = True
 			self.timer_command = time.time()
 		#print 'commandCallback'
-	
+	'''
+	'''
+		def CommandCallback(self, data):
+		
+		
+		#	Function called when receive a new value
+		#	@param data: state to convert
+		#	@type data: sensor_msgs.JointState
+		
+		bingo = False
+		
+		for i in range(len(data.name)):
+			if self.desired_joints_position.has_key(data.name[i]):
+				self.desired_joints_position[data.name[i]] = data.position[i]
+				self.desired_joints_velocity[data.name[i]] = data.velocity[i]
+				bingo = True
+				
+		
+		if bingo:
+			self.new_command = True
+			self.timer_command = time.time()
+		#print 'commandCallback'
+	'''
 	
 	def readTemp(self):
 		'''
@@ -956,13 +1002,25 @@ class BHand:
 			Closes all the fingers
 		'''		
 		self.desired_joints_position['F1'] = value
-		self.desired_joints_position['F2'] = value
-		self.desired_joints_position['F3'] = value
+		self.desired_joints_position['F2'] = value/2
+		self.desired_joints_position['F3'] = value/3
 		self.hand.move_to(FINGER1, self.hand.rad_to_enc(self.desired_joints_position['F1'], BASE_TYPE), False)
 		self.hand.move_to(FINGER2, self.hand.rad_to_enc(self.desired_joints_position['F2'], BASE_TYPE), False)
 		self.hand.move_to(FINGER3, self.hand.rad_to_enc(self.desired_joints_position['F3'], BASE_TYPE), False)
 		
-		
+	#def desiredGrasp(self, values)
+		'''
+			Follow the desired grasp angles
+		'''
+	#	self.desired_joints_position['F1'] = value
+	#	self.desired_joints_position['F2'] = value/2
+	#	self.desired_joints_position['F3'] = value/3
+	#	self.desired_joints_position['SPREAD_1'] = 3.14
+	#	self.hand.move_to(FINGER1, self.hand.rad_to_enc(self.desired_joints_position['F1'], BASE_TYPE), False)
+	#	self.hand.move_to(FINGER2, self.hand.rad_to_enc(self.desired_joints_position['F2'], BASE_TYPE), False)
+	#	self.hand.move_to(FINGER3, self.hand.rad_to_enc(self.desired_joints_position['F3'], BASE_TYPE), False)
+	#	self.hand.move_to(SPREAD, self.hand.rad_to_enc(self.desired_joints_position['SPREAD_1'], BASE_TYPE), False)
+
 		
 def main():
 
@@ -972,10 +1030,10 @@ def main():
 	_name = rospy.get_name()
 	
 	arg_defaults = {
-	  'port':  '/dev/pcan32',
+	  'port':  '/dev/pcanusb1',
 	  'topic_state': 'state',
 	  'desired_freq': DEFAULT_FREQ,
-	  'tactile_sensors': True,
+	  'tactile_sensors': False,
 	  'control_mode': 'POSITION',
 	  'joint_ids': [ 'F1', 'F1_TIP', 'F2', 'F2_TIP', 'F3', 'F3_TIP', 'SPREAD_1', 'SPREAD_2'],
 	  'joint_names': ['bh_j12_joint', 'bh_j13_joint', 'bh_j22_joint', 'bh_j23_joint', 'bh_j32_joint', 'bh_j31_joint', 'bh_j11_joint', 'bh_j21_joint']
